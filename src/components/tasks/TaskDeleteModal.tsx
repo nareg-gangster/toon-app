@@ -33,6 +33,12 @@ export default function TaskDeleteModal({
   // MOVE ALL CALCULATIONS TO THE TOP (before any returns)
   const isMultiple = tasks.length > 1
   
+  // Check if this is a disabled recurring template (single task only)
+  const isDisabledRecurringTemplate = !isMultiple && 
+    tasks[0]?.is_recurring && 
+    tasks[0]?.parent_task_id === null && 
+    tasks[0]?.is_recurring_enabled === false
+  
   // Categorize tasks more specifically
   const deletableTasks = tasks.filter(task => 
     task.status === 'pending'
@@ -127,7 +133,7 @@ export default function TaskDeleteModal({
   // If only non-actionable tasks, show different UI
   if (hasOnlyNonActionable) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
         <Card className="w-full max-w-md mx-auto">
           <CardHeader>
             <CardTitle className="flex items-center text-orange-700">
@@ -193,7 +199,7 @@ export default function TaskDeleteModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
       <Card className="w-full max-w-md mx-auto max-h-[90vh] overflow-y-auto">
         <CardHeader>
           <CardTitle className={`flex items-center ${action === 'delete' ? 'text-red-700' : 'text-orange-700'}`}>
@@ -201,7 +207,9 @@ export default function TaskDeleteModal({
             {getActionTitle()} {isMultiple ? `${action === 'archive' ? archivableTasks.length : deletableTasks.length} Tasks` : 'Task'}
           </CardTitle>
           <CardDescription>
-            {action === 'archive' 
+            {isDisabledRecurringTemplate 
+              ? `Delete recurring task "${tasks[0]?.title}"? This action cannot be reversed.`
+              : action === 'archive' 
               ? `Archive ${isMultiple ? `${archivableTasks.length} approved tasks` : `"${archivableTasks[0]?.title}"`}? They'll be preserved in history.`
               : `Permanently delete ${isMultiple ? `${deletableTasks.length} active tasks` : `"${deletableTasks[0]?.title}"`}?`
             }
@@ -265,7 +273,9 @@ export default function TaskDeleteModal({
                   Permanent Deletion
                 </p>
                 <p className="text-xs text-red-700">
-                  {hasMixed 
+                  {isDisabledRecurringTemplate 
+                    ? 'This action cannot be reversed. You will permanently delete this recurring task and no tasks will automatically be created anymore.'
+                    : hasMixed 
                     ? `Only ${deletableTasks.length} active tasks will be deleted.`
                     : 'This action cannot be undone. All task data will be lost.'
                   }
@@ -367,7 +377,7 @@ export default function TaskDeleteModal({
               htmlFor="confirm"
               className="text-sm text-gray-700 cursor-pointer"
             >
-              I understand this action {action === 'delete' ? 'cannot be undone' : 'will archive the approved tasks'}
+              I understand this action {isDisabledRecurringTemplate ? 'cannot be reversed and will permanently delete this recurring task' : action === 'delete' ? 'cannot be undone' : 'will archive the approved tasks'}
             </label>
           </div>
 

@@ -7,29 +7,58 @@ import { useAuth } from '@/hooks/useAuth'
 import { useTasks } from '@/hooks/useTasks'
 import PasswordChangeModal from '@/components/PasswordChangeModal'
 import TaskCompletionModal from '@/components/tasks/TaskCompletionModal'
-import TaskFilters from '@/components/tasks/TaskFilters'
 import { supabase } from '@/lib/supabase'
 import { TaskCompletionData } from '@/types'
 import Link from 'next/link'
+import StartNegotiationModal from '@/components/negotiations/StartNegotiationModal'
+import CountdownTimer, { shouldShowCountdown } from '@/components/ui/CountdownTimer'
+import { useFamilyMembers } from '@/hooks/useFamilyMembers'
+import { Trophy, Clock, Star, Zap, Lock } from 'lucide-react'
+import { isTaskOverdue, isTaskStrictAndLocked, canSubmitTask } from '@/lib/utils'
 
 export default function ChildDashboard() {
   const { user, loading, requireAuth, refetchUser } = useAuth()
   const { 
     tasks, 
     loading: tasksLoading, 
-    filters,
-    updateFilters,
-    clearFilters,
     updateTaskStatus, 
     completeTaskWithDetails,
     getFilterStats
   } = useTasks(undefined, user?.id)
+  const { familyMembers } = useFamilyMembers(user?.family_id)
   
   const [needsPasswordChange, setNeedsPasswordChange] = useState(false)
   const [checkingPassword, setCheckingPassword] = useState(true)
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState<any>(null)
   const [submittingCompletion, setSubmittingCompletion] = useState(false)
+  const [showNegotiationModal, setShowNegotiationModal] = useState(false)
+  const [selectedTaskForNegotiation, setSelectedTaskForNegotiation] = useState<any>(null)
+
+  // Helper function to get today's tasks (excluding approved tasks)
+  const getTodaysTasks = () => {
+    const today = new Date()
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
+    
+    return tasks.filter(task => {
+      if (!task.due_date) return false
+      const dueDate = new Date(task.due_date)
+      return dueDate >= todayStart && 
+             dueDate < todayEnd && 
+             task.status !== 'archived' && 
+             task.status !== 'approved' // Don't show completed/approved tasks
+    })
+  }
+
+
+  // Helper function to get leaderboard data
+  const getLeaderboard = () => {
+    const children = familyMembers.filter(member => member.role === 'child')
+    return children
+      .sort((a, b) => (b.points || 0) - (a.points || 0))
+      .slice(0, 5) // Top 5
+  }
 
   useEffect(() => {
     if (!loading) {
@@ -95,6 +124,16 @@ export default function ChildDashboard() {
     }
   }
 
+  const handleStartNegotiation = (task: any) => {
+    setSelectedTaskForNegotiation(task)
+    setShowNegotiationModal(true)
+  }
+
+  const handleNegotiationModalClose = () => {
+    setShowNegotiationModal(false)
+    setSelectedTaskForNegotiation(null)
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800'
@@ -108,18 +147,61 @@ export default function ChildDashboard() {
   }
 
   const getTaskActionButton = (task: any) => {
+    // Check if task is strict and locked
+    const isStrictLocked = isTaskStrictAndLocked(task)
+    const canSubmit = canSubmitTask(task)
+    
+    // If strict task is locked, show locked message
+    if (isStrictLocked) {
+      return (
+        <div className="text-center py-3 bg-red-100 border border-red-300 rounded-lg">
+          <div className="flex items-center justify-center space-x-2 mb-1">
+            <Lock className="w-4 h-4 text-red-700" />
+            <p className="text-sm text-red-800 font-medium">Task Locked</p>
+          </div>
+          <p className="text-xs text-red-700">
+            Deadline missed. Penalty applied.
+          </p>
+        </div>
+      )
+    }
+    
+    const isNegotiable = task.task_type === 'negotiable' && ['pending', 'in_progress'].includes(task.status)
+    
     switch (task.status) {
       case 'pending':
         return (
-          <Button className="w-full" onClick={() => updateTaskStatus(task.id, 'in_progress')}>
-            🚀 Start Task
-          </Button>
+          <div className="space-y-2">
+            <Button className="w-full" onClick={() => updateTaskStatus(task.id, 'in_progress')}>
+              🚀 Start Task
+            </Button>
+            {isNegotiable && (
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => handleStartNegotiation(task)}
+              >
+                🤝 Start Negotiation
+              </Button>
+            )}
+          </div>
         )
       case 'in_progress':
         return (
-          <Button className="w-full" onClick={() => handleCompleteTask(task)}>
-            ✅ Mark Complete
-          </Button>
+          <div className="space-y-2">
+            <Button className="w-full" onClick={() => handleCompleteTask(task)}>
+              ✅ Mark Complete
+            </Button>
+            {isNegotiable && (
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => handleStartNegotiation(task)}
+              >
+                🤝 Start Negotiation
+              </Button>
+            )}
+          </div>
         )
       case 'completed':
         return (
@@ -192,20 +274,172 @@ export default function ChildDashboard() {
     <>
       <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 md:hidden">My Tasks</h1>
-          <p className="text-gray-600 md:hidden">Hello, {user.name}!</p>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user.name}!</h1>
+          <p className="text-gray-600">Here's what's happening today</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Stats & Filters */}
+          {/* Left Column - Today's Tasks */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Today's Tasks */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Clock className="w-5 h-5 mr-2 text-blue-600" />
+                  Today's Tasks
+                </CardTitle>
+                <CardDescription>
+                  {getTodaysTasks().length} task{getTodaysTasks().length !== 1 ? 's' : ''} due today
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {tasksLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-gray-600">Loading tasks...</p>
+                  </div>
+                ) : getTodaysTasks().length > 0 ? (
+                  <div className="space-y-4">
+                    {getTodaysTasks().map((task) => {
+                      const overdue = isTaskOverdue(task)
+                      const isStrictLocked = isTaskStrictAndLocked(task)
+                      return (
+                        <Card key={task.id} className={`${
+                          task.status === 'archived' ? 'bg-gray-50 opacity-75' : 
+                          isStrictLocked ? 'border-red-500 bg-red-100 opacity-90' :
+                          overdue ? 'border-red-300 bg-red-50' : ''
+                        }`}>
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg">{task.title}</CardTitle>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
+                                {task.status.replace('_', ' ')}
+                              </span>
+                            </div>
+                            {task.description && (
+                              <CardDescription>{task.description}</CardDescription>
+                            )}
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {/* Due date and countdown */}
+                              <div className="flex items-center justify-between text-sm">
+                                <div className="flex items-center text-gray-600">
+                                  <Clock className="w-4 h-4 mr-1" />
+                                  <span>Due: {new Date(task.due_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                  {overdue && (
+                                    <span className="text-red-500 ml-2 font-medium">• Overdue</span>
+                                  )}
+                                </div>
+                                {shouldShowCountdown(task.due_date) && (
+                                  <CountdownTimer dueDate={task.due_date} compact />
+                                )}
+                              </div>
+
+                              {/* Points and badges */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xl font-bold text-blue-600">{task.points}</span>
+                                  <span className="text-sm text-gray-500">points</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {task.task_type === 'negotiable' && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                      🤝 Negotiable
+                                    </span>
+                                  )}
+                                  {task.is_recurring === false && task.parent_task_id !== null && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600">
+                                      📅 {task.recurring_pattern === 'daily' ? 'Daily' : task.recurring_pattern === 'weekly' ? 'Weekly' : 'Monthly'}
+                                    </span>
+                                  )}
+                                  {(task.penalty_points || 0) > 0 && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                      ⚡ -{task.penalty_points} penalty
+                                    </span>
+                                  )}
+                                  {task.is_strict && (
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      isTaskStrictAndLocked(task) 
+                                        ? 'bg-red-200 text-red-800' 
+                                        : 'bg-red-50 text-red-700'
+                                    }`}>
+                                      🔒 {isTaskStrictAndLocked(task) ? 'Locked' : 'Strict'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* Action buttons */}
+                              {getTaskActionButton(task)}
+
+                              {/* Overdue penalty notification */}
+                              {overdue && (task.penalty_points || 0) > 0 && !isStrictLocked && (
+                                <div className="p-3 bg-red-100 border border-red-200 rounded-lg">
+                                  <div className="flex items-start space-x-2">
+                                    <div className="text-red-600 text-sm font-medium">
+                                      ⚠️ Task Overdue
+                                    </div>
+                                  </div>
+                                  <p className="text-red-700 text-xs mt-1">
+                                    Penalty of {task.penalty_points} point{task.penalty_points !== 1 ? 's' : ''} may be applied for missing the deadline.
+                                    {!task.is_strict && ' Task can still be completed.'}
+                                  </p>
+                                </div>
+                              )}
+                              
+                              {/* Strict task locked notification */}
+                              {isStrictLocked && (task.penalty_points || 0) > 0 && (
+                                <div className="p-3 bg-red-200 border border-red-400 rounded-lg">
+                                  <div className="flex items-start space-x-2">
+                                    <Lock className="w-4 h-4 text-red-700 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                      <div className="text-red-800 text-sm font-medium">
+                                        Task Deadline Missed
+                                      </div>
+                                      <p className="text-red-700 text-xs mt-1">
+                                        Penalty of {task.penalty_points} point{task.penalty_points !== 1 ? 's' : ''} has been applied. 
+                                        This strict task is now locked and cannot be completed.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-6xl mb-4">🎯</div>
+                    <p className="text-gray-500 text-lg">No tasks due today!</p>
+                    <p className="text-sm text-gray-400 mt-2">
+                      Enjoy your free time or check tomorrow's schedule.
+                    </p>
+                    <Link href="/dashboard/child/tasks">
+                      <Button variant="outline" className="mt-4">
+                        View All Tasks
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+          </div>
+
+          {/* Right Column - Stats & Leaderboard */}
           <div className="lg:col-span-1 space-y-6">
             
             {/* My Stats */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  ⭐ My Progress
+                  <Star className="w-5 h-5 mr-2 text-yellow-500" />
+                  My Progress
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -215,21 +449,15 @@ export default function ChildDashboard() {
                     <span className="font-bold text-blue-600">{user.points || 0}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Active Tasks:</span>
+                    <span className="text-sm text-gray-600">Today's Tasks:</span>
                     <span className="font-bold text-orange-600">
-                      {stats.pending + stats.inProgress}
+                      {getTodaysTasks().length}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Need Review:</span>
                     <span className="font-bold text-purple-600">
                       {stats.completed}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Completed:</span>
-                    <span className="font-bold text-green-600">
-                      {stats.approved}
                     </span>
                   </div>
                   {stats.overdue > 0 && (
@@ -240,124 +468,76 @@ export default function ChildDashboard() {
                       </span>
                     </div>
                   )}
-                  
-                  {/* Add profile link */}
-                  <div className="pt-3 border-t">
-                    <Link href="/dashboard/child/profile">
-                      <Button variant="outline" size="sm" className="w-full">
-                        👤 View My Profile
-                      </Button>
-                    </Link>
-                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Filters */}
-            <TaskFilters
-              filters={filters}
-              onFiltersChange={updateFilters}
-              onClearFilters={clearFilters}
-              isParent={false}
-              stats={stats}
-            />
-
-          </div>
-
-          {/* Tasks */}
-          <div className="lg:col-span-3">
+            {/* Sibling Leaderboard */}
             <Card>
               <CardHeader>
-                <CardTitle>📝 My Tasks</CardTitle>
+                <CardTitle className="flex items-center">
+                  <Trophy className="w-5 h-5 mr-2 text-yellow-500" />
+                  Leaderboard
+                </CardTitle>
                 <CardDescription>
-                  {tasks.length} tasks shown
-                  {filters.status === 'active' && ' (active tasks only)'}
-                  {filters.showArchived && ' (including archived)'}
+                  Family points ranking
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {tasksLoading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                    <p className="text-gray-600">Loading tasks...</p>
-                  </div>
-                ) : tasks.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {tasks.map((task) => (
-                      <Card key={task.id} className={`${task.status === 'archived' ? 'bg-gray-50 opacity-75' : ''}`}>
-                        <CardHeader>
-                          <CardTitle className="text-lg flex items-center justify-between">
-                            <span>{task.title}</span>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                              {task.status.replace('_', ' ')}
-                            </span>
-                          </CardTitle>
-                          <CardDescription>
-                            {task.description}
-                            {task.due_date && (
-                              <div className="text-xs mt-1 flex items-center">
-                                📅 Due: {new Date(task.due_date).toLocaleDateString()}
-                                {new Date(task.due_date) < new Date() && task.status !== 'approved' && task.status !== 'archived' && (
-                                  <span className="text-red-500 ml-1 font-medium">• Overdue!</span>
-                                )}
-                              </div>
-                            )}
-                            {task.status === 'archived' && task.archived_at && (
-                              <div className="text-xs mt-1 text-gray-500">
-                                📁 Archived: {new Date(task.archived_at).toLocaleDateString()}
-                              </div>
-                            )}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                              <span className="text-2xl font-bold text-blue-600">{task.points}</span>
-                              <span className="text-sm text-gray-500">points</span>
-                            </div>
-                            
-                            {getTaskActionButton(task)}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <div className="text-6xl mb-4">📝</div>
-                    {filters.status === 'active' ? (
-                      <>
-                        <p className="text-gray-500 text-lg">No active tasks right now!</p>
-                        <p className="text-sm text-gray-400 mt-2">
-                          Great job! Check back later for new tasks.
-                        </p>
-                      </>
-                    ) : filters.showArchived ? (
-                      <>
-                        <p className="text-gray-500 text-lg">No archived tasks found</p>
-                        <p className="text-sm text-gray-400 mt-2">
-                          Complete some tasks to build your history!
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-gray-500 text-lg">No tasks match your filters</p>
-                        <p className="text-sm text-gray-400 mt-2">
-                          Try adjusting your filters or ask your parents for new tasks!
-                        </p>
-                        <Button 
-                          variant="outline" 
-                          className="mt-4"
-                          onClick={clearFilters}
-                        >
-                          Clear Filters
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
+                <div className="space-y-3">
+                  {getLeaderboard().map((member, index) => (
+                    <div key={member.id} className={`flex items-center justify-between p-2 rounded-lg ${
+                      member.id === user.id ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'
+                    }`}>
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          index === 0 ? 'bg-yellow-400 text-white' :
+                          index === 1 ? 'bg-gray-400 text-white' :
+                          index === 2 ? 'bg-orange-400 text-white' :
+                          'bg-gray-200 text-gray-600'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <span className={`text-sm ${member.id === user.id ? 'font-semibold text-blue-900' : 'text-gray-700'}`}>
+                          {member.id === user.id ? 'You' : member.name}
+                        </span>
+                      </div>
+                      <span className={`font-bold ${member.id === user.id ? 'text-blue-600' : 'text-gray-600'}`}>
+                        {member.points || 0}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Zap className="w-5 h-5 mr-2 text-purple-500" />
+                  Quick Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Link href="/dashboard/child/tasks">
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    📝 All Tasks
+                  </Button>
+                </Link>
+                <Link href="/dashboard/child/rewards">
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    🏆 Rewards
+                  </Button>
+                </Link>
+                <Link href="/dashboard/child/profile">
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    👤 My Profile
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
           </div>
 
         </div>
@@ -375,6 +555,15 @@ export default function ChildDashboard() {
         taskPoints={selectedTask?.points || 0}
         submitting={submittingCompletion}
       />
+
+      {/* Start Negotiation Modal */}
+      {selectedTaskForNegotiation && (
+        <StartNegotiationModal
+          isOpen={showNegotiationModal}
+          onClose={handleNegotiationModalClose}
+          task={selectedTaskForNegotiation}
+        />
+      )}
     </>
   )
 }

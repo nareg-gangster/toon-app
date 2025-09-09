@@ -1,22 +1,50 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/hooks/useAuth'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 
 export default function SignInPage() {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
-  const router = useRouter()
+
+  useEffect(() => {
+    // Redirect authenticated users to their dashboard
+    if (!authLoading && user) {
+      if (user.role === 'parent') {
+        router.push('/dashboard/parent')
+      } else if (user.role === 'child') {
+        router.push('/dashboard/child')
+      }
+    }
+  }, [user, authLoading, router])
+
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render if user is authenticated (they'll be redirected)
+  if (user) return null
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()

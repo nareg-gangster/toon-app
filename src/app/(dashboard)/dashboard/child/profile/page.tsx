@@ -7,11 +7,13 @@ import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/hooks/useAuth'
 import { useFamilyMembers } from '@/hooks/useFamilyMembers'
 import PasswordChangeModal from '@/components/PasswordChangeModal'
-import { User, Key, Trophy, Target, Star, Crown } from 'lucide-react'
+import { ProfilePictureUpload } from '@/components/ProfilePictureUpload'
+import { Avatar } from '@/components/ui/avatar'
+import { User, Key, Trophy, Target, Star, Crown, LogOut } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ChildProfilePage() {
-  const { user, requireAuth } = useAuth()
+  const { user, requireAuth, signOut } = useAuth()
   const { 
     familyMembers, 
     parents, 
@@ -20,9 +22,11 @@ export default function ChildProfilePage() {
   } = useFamilyMembers(user?.family_id)
 
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [currentUser, setCurrentUser] = useState(user)
 
   useEffect(() => {
     requireAuth('child')
+    setCurrentUser(user)
   }, [user])
 
   const getChildRankEmoji = (rank: number) => {
@@ -49,6 +53,10 @@ export default function ChildProfilePage() {
       completedTasks: 0,
       rank: getMyRank()
     }
+  }
+
+  const handleAvatarUpdate = (newAvatarUrl: string | null) => {
+    setCurrentUser((prev: any) => ({ ...prev, avatar_url: newAvatarUrl }))
   }
 
   if (!user) return null
@@ -94,18 +102,23 @@ export default function ChildProfilePage() {
                   My Profile
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="flex flex-col items-center space-y-4">
+                
+                <ProfilePictureUpload
+                  userId={currentUser?.id || ''}
+                  currentAvatarUrl={currentUser?.avatar_url}
+                  userName={currentUser?.name || ''}
+                  onUpdate={handleAvatarUpdate}
+                  size="xl"
+                />
                 
                 <div className="text-center">
-                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <User className="w-10 h-10 text-blue-600" />
-                  </div>
-                  <h3 className="font-medium text-lg">{user.name}</h3>
-                  <p className="text-gray-600 text-sm">{user.email}</p>
+                  <h3 className="font-medium text-lg">{currentUser?.name}</h3>
+                  <p className="text-gray-600 text-sm">{currentUser?.email}</p>
                   <Badge className="mt-2 bg-blue-100 text-blue-800">Child</Badge>
                 </div>
 
-                <div className="pt-4 border-t">
+                <div className="pt-4 border-t space-y-3">
                   <Button 
                     variant="outline" 
                     onClick={() => setShowPasswordModal(true)}
@@ -113,6 +126,14 @@ export default function ChildProfilePage() {
                   >
                     <Key className="w-4 h-4 mr-2" />
                     Change Password
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={signOut}
+                    className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
                   </Button>
                 </div>
 
@@ -195,8 +216,14 @@ export default function ChildProfilePage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {parents.map((parent) => (
                         <div key={parent.id} className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
+                          <div className="flex items-center space-x-3">
+                            <Avatar 
+                              src={parent.avatar_url} 
+                              alt={parent.name}
+                              size="md"
+                              fallbackName={parent.name}
+                            />
+                            <div className="flex-1">
                               <h4 className="font-medium">{parent.name}</h4>
                               <p className="text-sm text-gray-600">Family Manager</p>
                             </div>
@@ -228,10 +255,21 @@ export default function ChildProfilePage() {
                             
                             return (
                               <div key={child.id} className="border rounded-lg p-4">
-                                <div className="flex items-start justify-between mb-3">
-                                  <div>
-                                    <h4 className="font-medium flex items-center">
-                                      {getChildRankEmoji(actualRank)} {child.name}
+                                <div className="flex items-start space-x-3 mb-3">
+                                  <div className="relative">
+                                    <Avatar 
+                                      src={child.avatar_url} 
+                                      alt={child.name}
+                                      size="md"
+                                      fallbackName={child.name}
+                                    />
+                                    <div className="absolute -top-1 -right-1 text-sm">
+                                      {getChildRankEmoji(actualRank)}
+                                    </div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="font-medium">
+                                      {child.name}
                                     </h4>
                                     <p className="text-xs text-gray-500">Rank #{actualRank}</p>
                                   </div>

@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/useAuth'
 import { useRewards } from '@/hooks/useRewards'
 import RewardCard from '@/components/rewards/RewardCard'
+import toast from 'react-hot-toast'
 
 export default function ChildRewardsPage() {
   const { user, requireAuth } = useAuth()
@@ -24,9 +26,37 @@ export default function ChildRewardsPage() {
     const reward = rewards.find(r => r.id === rewardId)
     if (!reward) return
 
-    if (confirm(`Redeem "${reward.name}" for ${reward.cost} points?`)) {
-      await redeemReward(rewardId, reward.cost)
-    }
+    // Show confirmation toast
+    toast((t) => (
+      <div className="flex flex-col space-y-3">
+        <div>
+          <p className="font-medium">Redeem "{reward.name}"?</p>
+          <p className="text-sm text-gray-600">Cost: {reward.cost} points</p>
+          <p className="text-xs text-blue-600 mt-1">⚠️ This will need parent approval</p>
+        </div>
+        <div className="flex space-x-2">
+          <Button
+            size="sm"
+            onClick={async () => {
+              toast.dismiss(t.id)
+              await redeemReward(rewardId, reward.cost)
+            }}
+          >
+            Confirm Redemption
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    ), {
+      duration: Infinity,
+      position: 'top-center',
+    })
   }
 
   const getRedemptionStatusColor = (status: string) => {

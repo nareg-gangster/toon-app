@@ -11,13 +11,15 @@ import { useFamilyMembers } from '@/hooks/useFamilyMembers'
 import AddParentModal from '@/components/family/AddParentModal'
 import UnifiedChildModal from '@/components/family/UnifiedChildModal'
 import PasswordChangeModal from '@/components/PasswordChangeModal'
+import { ProfilePictureUpload } from '@/components/ProfilePictureUpload'
+import { Avatar } from '@/components/ui/avatar'
 import { familyMembersService } from '@/services/familyMembersService'
-import { Users, UserPlus, Baby, Settings, Key, Crown, Star, Mail, Clock, X } from 'lucide-react'
+import { Users, UserPlus, Baby, Settings, Key, Crown, Star, Mail, Clock, X, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 
 export default function ParentProfilePage() {
-  const { user, requireAuth } = useAuth()
+  const { user, requireAuth, signOut } = useAuth()
   const { 
     familyMembers, 
     parents, 
@@ -39,12 +41,14 @@ export default function ParentProfilePage() {
   const [submittingChild, setSubmittingChild] = useState(false)
   const [updatingFamily, setUpdatingFamily] = useState(false)
   const [showInvitationDetails, setShowInvitationDetails] = useState<any>(null)
+  const [currentUser, setCurrentUser] = useState(user)
 
   useEffect(() => {
     requireAuth('parent')
     if (user?.family_id) {
       loadFamilyInfo()
     }
+    setCurrentUser(user)
   }, [user])
 
   const loadFamilyInfo = async () => {
@@ -128,6 +132,10 @@ export default function ParentProfilePage() {
     }
   }
 
+  const handleAvatarUpdate = (newAvatarUrl: string | null) => {
+    setCurrentUser((prev: any) => ({ ...prev, avatar_url: newAvatarUrl }))
+  }
+
   if (!user) return null
 
   if (loading) {
@@ -161,6 +169,28 @@ export default function ParentProfilePage() {
           {/* Family Info & Settings */}
           <div className="lg:col-span-1 space-y-6">
             
+            {/* Profile Picture Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Profile</CardTitle>
+                <CardDescription>Update your profile picture and info</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center space-y-4">
+                <ProfilePictureUpload
+                  userId={currentUser?.id || ''}
+                  currentAvatarUrl={currentUser?.avatar_url}
+                  userName={currentUser?.name || ''}
+                  onUpdate={handleAvatarUpdate}
+                  size="xl"
+                />
+                <div className="text-center">
+                  <h3 className="font-semibold text-lg">{currentUser?.name}</h3>
+                  <p className="text-sm text-gray-600">{currentUser?.email}</p>
+                  <Badge className="mt-2 bg-purple-100 text-purple-800">Parent</Badge>
+                </div>
+              </CardContent>
+            </Card>
+            
             {/* Family Information */}
             <Card>
               <CardHeader>
@@ -187,7 +217,7 @@ export default function ParentProfilePage() {
                   </Button>
                 </form>
 
-                <div className="pt-4 border-t">
+                <div className="pt-4 border-t space-y-3">
                   <Button 
                     variant="outline" 
                     onClick={() => setShowPasswordModal(true)}
@@ -195,6 +225,14 @@ export default function ParentProfilePage() {
                   >
                     <Key className="w-4 h-4 mr-2" />
                     Change Password
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={signOut}
+                    className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
                   </Button>
                 </div>
 
@@ -298,8 +336,14 @@ export default function ParentProfilePage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {parents.map((parent) => (
                         <div key={parent.id} className="border rounded-lg p-4">
-                          <div className="flex items-start justify-between">
-                            <div>
+                          <div className="flex items-start space-x-3">
+                            <Avatar 
+                              src={parent.avatar_url} 
+                              alt={parent.name}
+                              size="md"
+                              fallbackName={parent.name}
+                            />
+                            <div className="flex-1">
                               <h4 className="font-medium flex items-center">
                                 {parent.name}
                                 {parent.id === user.id && (
@@ -332,10 +376,21 @@ export default function ParentProfilePage() {
                           .sort((a, b) => (b.points || 0) - (a.points || 0))
                           .map((child, index) => (
                           <div key={child.id} className="border rounded-lg p-4">
-                            <div className="flex items-start justify-between mb-3">
-                              <div>
-                                <h4 className="font-medium flex items-center">
-                                  {getChildRankEmoji(index + 1)} {child.name}
+                            <div className="flex items-start space-x-3 mb-3">
+                              <div className="relative">
+                                <Avatar 
+                                  src={child.avatar_url} 
+                                  alt={child.name}
+                                  size="md"
+                                  fallbackName={child.name}
+                                />
+                                <div className="absolute -top-1 -right-1 text-sm">
+                                  {getChildRankEmoji(index + 1)}
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-medium">
+                                  {child.name}
                                 </h4>
                                 <p className="text-sm text-gray-600">{child.email}</p>
                               </div>

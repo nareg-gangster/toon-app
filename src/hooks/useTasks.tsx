@@ -11,7 +11,9 @@ export const useTasks = (familyId?: string, childId?: string) => {
     status: 'all', // CHANGE FROM 'active' TO 'all'
     dueDate: 'all',
     assignedTo: 'all',
-    showArchived: false
+    showArchived: false,
+    taskType: 'all',
+    recurringPattern: 'all'
   })
 
   useEffect(() => {
@@ -29,17 +31,40 @@ export const useTasks = (familyId?: string, childId?: string) => {
 
   const loadTasks = async () => {
     try {
+      console.log('📥 LOAD TASKS: Starting loadTasks for', { familyId, childId, filters })
       setLoading(true)
       let tasksData: Task[]
 
       if (childId) {
+        console.log('👶 LOAD TASKS: Loading tasks for child:', childId)
         tasksData = await tasksService.getTasksForChild(childId, filters)
+        
+        // Check for overdue tasks and apply penalties immediately (client-side)
+        const { overdueTasksService } = await import('@/services/overdueTasksService')
+        const { processedTasks, penaltiesApplied } = await overdueTasksService.checkAndProcessOverdueTasks(tasksData)
+        
+        if (penaltiesApplied > 0) {
+          toast.error(`⚡ ${penaltiesApplied} task${penaltiesApplied > 1 ? 's' : ''} overdue - penalty points applied`)
+        }
+        
+        tasksData = processedTasks
       } else if (familyId) {
+        console.log('👨‍👩‍👧‍👦 LOAD TASKS: Loading tasks for family:', familyId)
         tasksData = await tasksService.getTasks(familyId, filters)
       } else {
+        console.log('❓ LOAD TASKS: No familyId or childId provided')
         tasksData = []
       }
 
+      console.log('📊 LOAD TASKS: Retrieved', tasksData.length, 'tasks')
+      console.log('📋 LOAD TASKS: Task summary:', tasksData.map(t => ({ 
+        id: t.id, 
+        title: t.title, 
+        status: t.status,
+        isRecurring: !!t.recurring_pattern,
+        enabled: t.is_recurring_enabled 
+      })))
+      
       setTasks(tasksData)
     } catch (error) {
       console.error('Error loading tasks:', error)
@@ -51,6 +76,7 @@ export const useTasks = (familyId?: string, childId?: string) => {
 
   const loadAllTasksForStats = async () => {
     try {
+      console.log('📈 LOAD ALL STATS: Starting loadAllTasksForStats for', { familyId, childId })
       let allTasksData: Task[]
 
       // Load ALL tasks without filters for accurate stats
@@ -58,7 +84,9 @@ export const useTasks = (familyId?: string, childId?: string) => {
         status: 'all',
         dueDate: 'all',
         assignedTo: 'all',
-        showArchived: true // Include archived for complete stats
+        showArchived: true, // Include archived for complete stats
+        taskType: 'all',
+        recurringPattern: 'all'
       }
 
       if (childId) {
@@ -69,6 +97,7 @@ export const useTasks = (familyId?: string, childId?: string) => {
         allTasksData = []
       }
 
+      console.log('📊 LOAD ALL STATS: Retrieved', allTasksData.length, 'tasks for stats')
       setAllTasks(allTasksData)
     } catch (error) {
       console.error('Error loading all tasks for stats:', error)
@@ -84,7 +113,9 @@ export const useTasks = (familyId?: string, childId?: string) => {
       status: 'all', // CHANGE FROM 'active' TO 'all'
       dueDate: 'all',
       assignedTo: 'all',
-      showArchived: false
+      showArchived: false,
+      taskType: 'all',
+      recurringPattern: 'all'
     })
   }
 
@@ -95,24 +126,48 @@ export const useTasks = (familyId?: string, childId?: string) => {
       setAllTasks(prev => [newTask, ...prev]) // Also update all tasks
       toast.success('Task created successfully! 🎉')
       return newTask
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating task:', error)
-      toast.error('Error creating task')
+      console.error('Error message:', error?.message)
+      console.error('Error details:', error?.details || error?.hint || error?.code)
+      toast.error(error?.message || 'Error creating task')
       throw error
     }
   }
 
-  const updateTask = async (taskId: string, taskData: Partial<CreateTaskData>) => {
+  const updateTask = async (taskId: string, taskData: Partial<CreateTaskData>, updateAllUpcoming?: boolean) => {
     try {
-      const updatedTask = await tasksService.updateTask(taskId, taskData)
-      setTasks(prev => prev.map(task => 
-        task.id === taskId ? updatedTask : task
-      ))
-      setAllTasks(prev => prev.map(task => 
-        task.id === taskId ? updatedTask : task
-      ))
-      toast.success('Task updated successfully! ✏️')
-      return updatedTask
+      if (updateAllUpcoming !== undefined) {
+        // Use recurring task update method
+        await tasksService.updateRecurringTask(taskId, taskData, updateAllUpcoming)
+        if (updateAllUpcoming) {
+          // If updating all upcoming, refresh the entire task list
+          await loadTasks()
+          toast.success('Recurring task series updated successfully! ✏️')
+        } else {
+          // If updating only one, use regular update logic
+          const updatedTask = await tasksService.updateTask(taskId, taskData)
+          setTasks(prev => prev.map(task => 
+            task.id === taskId ? updatedTask : task
+          ))
+          setAllTasks(prev => prev.map(task => 
+            task.id === taskId ? updatedTask : task
+          ))
+          toast.success('Task updated successfully! ✏️')
+          return updatedTask
+        }
+      } else {
+        // Regular task update
+        const updatedTask = await tasksService.updateTask(taskId, taskData)
+        setTasks(prev => prev.map(task => 
+          task.id === taskId ? updatedTask : task
+        ))
+        setAllTasks(prev => prev.map(task => 
+          task.id === taskId ? updatedTask : task
+        ))
+        toast.success('Task updated successfully! ✏️')
+        return updatedTask
+      }
     } catch (error) {
       console.error('Error updating task:', error)
       toast.error('Error updating task')
@@ -120,12 +175,28 @@ export const useTasks = (familyId?: string, childId?: string) => {
     }
   }
 
-  const deleteTask = async (taskId: string) => {
+  const deleteTask = async (taskId: string, deleteAllUpcoming?: boolean) => {
     try {
-      await tasksService.deleteTask(taskId)
-      setTasks(prev => prev.filter(task => task.id !== taskId))
-      setAllTasks(prev => prev.filter(task => task.id !== taskId))
-      toast.success('Task deleted successfully')
+      if (deleteAllUpcoming !== undefined) {
+        // Use recurring task delete method
+        await tasksService.deleteRecurringTask(taskId, deleteAllUpcoming)
+        if (deleteAllUpcoming) {
+          // If deleting all upcoming, refresh the entire task list
+          await loadTasks()
+          toast.success('Recurring task series deleted successfully')
+        } else {
+          // If deleting only one, just remove from local state
+          setTasks(prev => prev.filter(task => task.id !== taskId))
+          setAllTasks(prev => prev.filter(task => task.id !== taskId))
+          toast.success('Task deleted successfully')
+        }
+      } else {
+        // Regular task delete
+        await tasksService.deleteTask(taskId)
+        setTasks(prev => prev.filter(task => task.id !== taskId))
+        setAllTasks(prev => prev.filter(task => task.id !== taskId))
+        toast.success('Task deleted successfully')
+      }
     } catch (error: any) {
       console.error('Error deleting task:', error)
       if (error.message?.includes('Cannot delete completed tasks')) {
@@ -235,7 +306,12 @@ export const useTasks = (familyId?: string, childId?: string) => {
     completionData: TaskCompletionData
   ) => {
     try {
+      console.log('🔄 COMPLETE TASK: Starting completion for taskId:', taskId)
+      console.log('🔄 COMPLETE TASK: Task details:', { taskId, userId, completionData })
+      
       await tasksService.completeTaskWithDetails(taskId, userId, completionData)
+      
+      console.log('✅ COMPLETE TASK: Service call completed successfully')
       
       const updateTaskInList = (task: Task) => 
         task.id === taskId 
@@ -245,9 +321,10 @@ export const useTasks = (familyId?: string, childId?: string) => {
       setTasks(prev => prev.map(updateTaskInList))
       setAllTasks(prev => prev.map(updateTaskInList))
 
+      console.log('✅ COMPLETE TASK: UI state updated')
       toast.success('Task completed! Waiting for parent approval... ⭐')
     } catch (error) {
-      console.error('Error completing task:', error)
+      console.error('❌ COMPLETE TASK: Error completing task:', error)
       toast.error('Error completing task')
       throw error
     }
@@ -256,7 +333,33 @@ export const useTasks = (familyId?: string, childId?: string) => {
   const approveTask = async (taskId: string, assignedUserId: string, points: number) => {
     try {
       await tasksService.updateTaskStatus(taskId, 'approved')
-      await tasksService.awardPoints(assignedUserId, points)
+      
+      // Check if task has point split from negotiation
+      const task = allTasks.find(t => t.id === taskId)
+      if (task && task.point_split) {
+        // Distribute points according to negotiated split
+        const pointSplit = task.point_split as any
+        
+        // Award points to final assignee (current assigned user)
+        if (pointSplit.final_assignee && pointSplit.final_assignee > 0) {
+          await tasksService.awardPoints(assignedUserId, pointSplit.final_assignee)
+        }
+        
+        // Award points to original assignee if they get any
+        if (pointSplit.original_assignee && pointSplit.original_assignee > 0) {
+          // Find the original assignee from task history or negotiation
+          const originalAssigneeId = task.original_assignee || task.created_by
+          if (originalAssigneeId && originalAssigneeId !== assignedUserId) {
+            await tasksService.awardPoints(originalAssigneeId, pointSplit.original_assignee)
+          }
+        }
+        
+        toast.success(`Task approved! Points distributed: ${pointSplit.final_assignee} to final assignee, ${pointSplit.original_assignee} to original assignee! ⭐`)
+      } else {
+        // Regular task - award all points to assigned user
+        await tasksService.awardPoints(assignedUserId, points)
+        toast.success(`Task approved! ${points} points awarded! ⭐`)
+      }
       
       const updateTaskInList = (task: Task) => 
         task.id === taskId 
@@ -266,7 +369,6 @@ export const useTasks = (familyId?: string, childId?: string) => {
       setTasks(prev => prev.map(updateTaskInList))
       setAllTasks(prev => prev.map(updateTaskInList))
 
-      toast.success(`Task approved! ${points} points awarded! ⭐`)
     } catch (error) {
       console.error('Error approving task:', error)
       toast.error('Error approving task')
@@ -306,6 +408,49 @@ export const useTasks = (familyId?: string, childId?: string) => {
     }
   }
 
+  const updateRecurringTask = async (taskId: string, taskData: Partial<CreateTaskData>, updateAllUpcoming: boolean = false) => {
+    try {
+      await tasksService.updateRecurringTask(taskId, taskData, updateAllUpcoming)
+      await loadTasks() // Reload to show changes
+      await loadAllTasksForStats()
+      
+      const message = updateAllUpcoming ? 
+        'Recurring task updated for all upcoming instances! 🔄' : 
+        'Task updated! 📝'
+      toast.success(message)
+    } catch (error) {
+      console.error('Error updating recurring task:', error)
+      toast.error('Error updating task')
+      throw error
+    }
+  }
+
+  const deleteRecurringTask = async (taskId: string, deleteAllUpcoming: boolean = false) => {
+    try {
+      await tasksService.deleteRecurringTask(taskId, deleteAllUpcoming)
+      await loadTasks() // Reload to show changes
+      await loadAllTasksForStats()
+      
+      const message = deleteAllUpcoming ? 
+        'Recurring task and all upcoming instances deleted! 🗑️' : 
+        'Task deleted! 🗑️'
+      toast.success(message)
+    } catch (error) {
+      console.error('Error deleting recurring task:', error)
+      toast.error('Error deleting task')
+      throw error
+    }
+  }
+
+  const isRecurringTask = async (taskId: string): Promise<boolean> => {
+    try {
+      return await tasksService.isRecurringTask(taskId)
+    } catch (error) {
+      console.error('Error checking if task is recurring:', error)
+      return false
+    }
+  }
+
   return {
     tasks,
     loading,
@@ -326,6 +471,10 @@ export const useTasks = (familyId?: string, childId?: string) => {
     approveTask,
     rejectTask,
     getFilterStats,
-    refetchTasks: loadTasks
+    refetchTasks: loadTasks,
+    // New recurring task methods
+    updateRecurringTask,
+    deleteRecurringTask,
+    isRecurringTask
   }
 }

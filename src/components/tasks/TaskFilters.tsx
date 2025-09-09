@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Filter, X, Calendar, User, CheckSquare } from 'lucide-react'
+import { Filter, X, Calendar, User, CheckSquare, Repeat, Clock } from 'lucide-react'
 import { TaskFilters as TaskFiltersType } from '@/types'
 
 interface Child {
@@ -63,7 +63,9 @@ export default function TaskFilters({
     filters.status !== 'active' || 
     filters.dueDate !== 'all' || 
     (isParent && filters.assignedTo !== 'all') ||
-    filters.showArchived
+    filters.showArchived ||
+    filters.taskType !== 'all' ||
+    (filters.taskType === 'recurring' && filters.recurringPattern !== 'all')
 
   const getActiveFiltersCount = () => {
     let count = 0
@@ -71,6 +73,8 @@ export default function TaskFilters({
     if (filters.dueDate !== 'all') count++
     if (isParent && filters.assignedTo !== 'all') count++
     if (filters.showArchived) count++
+    if (filters.taskType !== 'all') count++
+    if (filters.taskType === 'recurring' && filters.recurringPattern !== 'all') count++
     return count
   }
 
@@ -172,6 +176,51 @@ export default function TaskFilters({
             </SelectContent>
           </Select>
         </div>
+
+        {/* Task Type Filter */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium flex items-center">
+            <Repeat className="w-3 h-3 mr-1" />
+            Task Type
+          </label>
+          <Select 
+            value={filters.taskType} 
+            onValueChange={(value: 'all' | 'recurring' | 'one-time') => onFiltersChange({ taskType: value, recurringPattern: 'all' })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tasks</SelectItem>
+              <SelectItem value="recurring">🔄 Recurring Tasks</SelectItem>
+              <SelectItem value="one-time">📅 One-Time Tasks</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Recurring Pattern Filter (only when recurring is selected) */}
+        {filters.taskType === 'recurring' && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium flex items-center">
+              <Clock className="w-3 h-3 mr-1" />
+              Recurring Pattern
+            </label>
+            <Select 
+              value={filters.recurringPattern} 
+              onValueChange={(value: 'all' | 'daily' | 'weekly' | 'monthly') => onFiltersChange({ recurringPattern: value })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Patterns</SelectItem>
+                <SelectItem value="daily">📆 Daily</SelectItem>
+                <SelectItem value="weekly">📅 Weekly</SelectItem>
+                <SelectItem value="monthly">🗓️ Monthly</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Child Filter (Parents Only) */}
         {isParent && children.length > 0 && (

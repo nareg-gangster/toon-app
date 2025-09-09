@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Avatar } from '@/components/ui/avatar'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import PasswordChangeModal from '@/components/PasswordChangeModal'
@@ -23,6 +24,7 @@ interface FamilyMember {
   name: string
   role: string
   points: number
+  avatar_url?: string | null
 }
 
 export default function ParentDashboard() {
@@ -56,7 +58,7 @@ export default function ParentDashboard() {
     
     const { data: familyData, error } = await supabase
       .from('users')
-      .select('id, name, role, points')
+      .select('id, name, role, points, avatar_url')
       .eq('family_id', user.family_id)
       .order('role', { ascending: false })
   
@@ -146,23 +148,13 @@ export default function ParentDashboard() {
     <div className="min-h-screen bg-gray-50">
       <Toaster position="top-center" />
       
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Family Tasks</h1>
-              <p className="text-sm text-gray-600">Parent Dashboard</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">Welcome, {user?.name}!</span>
-              <Button variant="outline" onClick={handleSignOut}>
-                Sign Out
-              </Button>
-            </div>
-          </div>
+      {/* Mobile Header */}
+      <div className="md:hidden mb-6">
+        <div className="bg-white shadow-sm border-b px-4 py-3">
+          <h1 className="text-xl font-bold text-gray-900">Parent Dashboard</h1>
+          <p className="text-sm text-gray-600">Welcome, {user?.name}!</p>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
@@ -182,8 +174,14 @@ export default function ParentDashboard() {
               <div className="space-y-3">
                 {familyMembers.length > 0 ? (
                   familyMembers.map((member) => (
-                    <div key={member.id} className="flex justify-between items-center">
-                      <div>
+                    <div key={member.id} className="flex items-center space-x-3">
+                      <Avatar 
+                        src={member.avatar_url} 
+                        alt={member.name}
+                        size="md"
+                        fallbackName={member.name}
+                      />
+                      <div className="flex-1">
                         <p className="font-medium">{member.name}</p>
                         <p className="text-sm text-gray-600 capitalize">{member.role}</p>
                       </div>
