@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { recurringTasksService } from '@/services/recurringTasksService'
 
+export const dynamic = 'force-static'
+
 // POST /api/recurring-tasks/check-overdue
 export async function POST(request: NextRequest) {
   try {

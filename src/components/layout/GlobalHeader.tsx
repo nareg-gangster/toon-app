@@ -8,6 +8,7 @@ import { User } from '@/types'
 import { cn } from '@/lib/utils'
 import { negotiationService } from '@/services/negotiationService'
 import { useRewards } from '@/hooks/useRewards'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { 
   Home, 
   CheckSquare, 
@@ -114,6 +115,7 @@ export default function GlobalHeader({ user, onSignOut }: GlobalHeaderProps) {
           
           {user && (
             <div className="flex items-center space-x-4">
+              <NotificationBell />
               <div className="flex items-center space-x-3">
                 {user.role === 'child' && (
                   <div className="text-center bg-blue-50 rounded-lg px-3 py-1">
