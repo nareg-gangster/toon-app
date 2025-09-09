@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { notificationTriggers } from '@/services/notificationTriggers'
 import { 
   Negotiation, 
   NegotiationMessage, 
@@ -72,6 +73,20 @@ export class NegotiationService {
 
     // Create initial message
     await this.addNegotiationMessage(negotiation.id, 'offer', data.offer_message || 'Transfer offer')
+
+    // Send notification to recipient about new negotiation offer
+    try {
+      const taskTitle = negotiation.task?.title || 'Task'
+      await notificationTriggers.triggerNegotiationOffer(
+        data.recipient_id,
+        taskTitle,
+        negotiation.id,
+        data.task_id
+      )
+    } catch (notificationError) {
+      console.error('Failed to send negotiation notification:', notificationError)
+      // Don't throw error - negotiation creation should succeed even if notification fails
+    }
 
     return negotiation as Negotiation
   }
@@ -238,6 +253,19 @@ export class NegotiationService {
     // Add acceptance message
     await this.addNegotiationMessage(negotiationId, 'acceptance', responseMessage)
 
+    // Send notification to the initiator about acceptance
+    try {
+      const taskTitle = updatedNegotiation.task?.title || 'Task'
+      await notificationTriggers.triggerNegotiationResponse(
+        updatedNegotiation.initiator_id,
+        taskTitle,
+        'accepted',
+        negotiationId
+      )
+    } catch (notificationError) {
+      console.error('Failed to send negotiation acceptance notification:', notificationError)
+    }
+
     return updatedNegotiation as Negotiation
   }
 
@@ -266,6 +294,25 @@ export class NegotiationService {
 
     // Add rejection message
     await this.addNegotiationMessage(negotiationId, 'rejection', responseMessage)
+
+    // Send notification to the initiator about rejection
+    try {
+      const { data: taskData } = await supabase
+        .from('tasks')
+        .select('title')
+        .eq('id', negotiation.task_id)
+        .single()
+      
+      const taskTitle = taskData?.title || 'Task'
+      await notificationTriggers.triggerNegotiationResponse(
+        negotiation.initiator_id,
+        taskTitle,
+        'rejected',
+        negotiationId
+      )
+    } catch (notificationError) {
+      console.error('Failed to send negotiation rejection notification:', notificationError)
+    }
 
     return negotiation as Negotiation
   }

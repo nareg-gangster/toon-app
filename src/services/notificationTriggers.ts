@@ -93,6 +93,33 @@ class NotificationTriggerService {
     });
   }
 
+  // Trigger notification for negotiation offers
+  async triggerNegotiationOffer(recipientUserId: string, taskTitle: string, negotiationId: string, taskId: string) {
+    await this.sendNotification({
+      type: 'task_assigned', // Reusing existing type
+      userId: recipientUserId,
+      title: 'New Task Transfer Offer! 🤝',
+      body: `You have a transfer offer for "${taskTitle}"`,
+      data: { negotiationId, taskId, type: 'negotiation_offer' }
+    });
+  }
+
+  // Trigger notification for negotiation responses
+  async triggerNegotiationResponse(recipientUserId: string, taskTitle: string, response: 'accepted' | 'rejected', negotiationId: string) {
+    const title = response === 'accepted' ? 'Offer Accepted! ✅' : 'Offer Declined ❌';
+    const body = response === 'accepted' 
+      ? `Your transfer offer for "${taskTitle}" was accepted`
+      : `Your transfer offer for "${taskTitle}" was declined`;
+
+    await this.sendNotification({
+      type: 'task_approved',
+      userId: recipientUserId,
+      title,
+      body,
+      data: { negotiationId, type: 'negotiation_response', response }
+    });
+  }
+
   // Helper to notify all parents in a family
   private async notifyParents(childUserId: string, title: string, body: string, data: any) {
     try {

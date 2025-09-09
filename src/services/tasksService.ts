@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { Task, CreateTaskData, TaskCompletionData, TaskFilters } from '@/types'
+import { notificationTriggers } from '@/services/notificationTriggers'
 
 export const tasksService = {
   async getTasks(familyId: string, filters?: TaskFilters): Promise<Task[]> {
@@ -477,6 +478,21 @@ export const tasksService = {
 
     if (error) throw error
 
+    // Trigger notification for task creation (only for non-hanging tasks with assigned users)
+    if (data.assigned_to && data.assigned_to !== createdBy && !taskData.is_hanging) {
+      try {
+        await notificationTriggers.triggerTaskCreated(
+          data.id,
+          data.title,
+          data.assigned_to,
+          createdBy
+        )
+      } catch (notificationError) {
+        console.error('Failed to send task creation notification:', notificationError)
+        // Don't throw error - task creation should succeed even if notification fails
+      }
+    }
+
     // If this is a recurring task, create the first instance immediately
     if (taskData.is_recurring) {
       await this.createFirstRecurringInstance(data)
@@ -547,6 +563,21 @@ export const tasksService = {
   },
 
   async updateTaskStatus(taskId: string, status: Task['status'], extraData?: any): Promise<void> {
+    // First get the task details for notifications
+    const { data: taskDetails, error: fetchError } = await supabase
+      .from('tasks')
+      .select(`
+        id,
+        title,
+        assigned_to,
+        created_by,
+        status
+      `)
+      .eq('id', taskId)
+      .single()
+
+    if (fetchError) throw fetchError
+
     const updateData: any = { status }
     
     if (status === 'completed') {
@@ -567,6 +598,22 @@ export const tasksService = {
       .eq('id', taskId)
 
     if (error) throw error
+
+    // Trigger notifications for status changes
+    if (taskDetails && extraData?.userId) {
+      try {
+        await notificationTriggers.triggerTaskStatusChange(
+          taskDetails.id,
+          taskDetails.title,
+          status,
+          extraData.userId, // Who made the change
+          taskDetails.assigned_to
+        )
+      } catch (notificationError) {
+        console.error('Failed to send task status change notification:', notificationError)
+        // Don't throw error - status update should succeed even if notification fails
+      }
+    }
 
     // No longer generate recurring tasks on approval - now done when deadline passes
   },

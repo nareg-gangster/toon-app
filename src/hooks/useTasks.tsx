@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { tasksService } from '@/services/tasksService'
 import { Task, CreateTaskData, TaskCompletionData, TaskFilters } from '@/types'
 import toast from 'react-hot-toast'
+import { useAuth } from '@/hooks/useAuth'
 
 export const useTasks = (familyId?: string, childId?: string) => {
+  const { user } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
   const [allTasks, setAllTasks] = useState<Task[]>([]) // Keep unfiltered tasks for stats
   const [loading, setLoading] = useState(true)
@@ -281,7 +283,7 @@ export const useTasks = (familyId?: string, childId?: string) => {
 
   const updateTaskStatus = async (taskId: string, status: Task['status']) => {
     try {
-      await tasksService.updateTaskStatus(taskId, status)
+      await tasksService.updateTaskStatus(taskId, status, { userId: user?.id })
       
       const updateTaskInList = (task: Task) => 
         task.id === taskId 
@@ -332,7 +334,7 @@ export const useTasks = (familyId?: string, childId?: string) => {
 
   const approveTask = async (taskId: string, assignedUserId: string, points: number) => {
     try {
-      await tasksService.updateTaskStatus(taskId, 'approved')
+      await tasksService.updateTaskStatus(taskId, 'approved', { userId: user?.id })
       
       // Check if task has point split from negotiation
       const task = allTasks.find(t => t.id === taskId)
@@ -377,7 +379,7 @@ export const useTasks = (familyId?: string, childId?: string) => {
 
   const rejectTask = async (taskId: string, rejectionReason?: string) => {
     try {
-      await tasksService.updateTaskStatus(taskId, 'rejected', { rejectionReason })
+      await tasksService.updateTaskStatus(taskId, 'rejected', { rejectionReason, userId: user?.id })
       
       const updateTaskInList = (task: Task) => 
         task.id === taskId 
