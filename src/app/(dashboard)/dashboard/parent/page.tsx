@@ -148,8 +148,8 @@ export default function ParentDashboard() {
     <div className="min-h-screen bg-gray-50">
       <Toaster position="top-center" />
       
-      {/* Mobile Header */}
-      <div className="md:hidden mb-6">
+      {/* Mobile Header - Hidden since we now have GlobalHeader on mobile */}
+      <div className="hidden">
         <div className="bg-white shadow-sm border-b px-4 py-3">
           <h1 className="text-xl font-bold text-gray-900">Parent Dashboard</h1>
           <p className="text-sm text-gray-600">Welcome, {user?.name}!</p>

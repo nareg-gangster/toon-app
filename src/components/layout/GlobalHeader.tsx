@@ -24,8 +24,8 @@ interface GlobalHeaderProps {
 }
 
 export default function GlobalHeader({ user, onSignOut }: GlobalHeaderProps) {
-  // Only show on desktop - mobile has local headers and bottom navigation
-  const headerClasses = "hidden md:flex bg-white shadow-sm border-b"
+  // Show on both mobile and desktop with responsive design
+  const headerClasses = "flex bg-white shadow-sm border-b"
   const pathname = usePathname()
   const [pendingNegotiations, setPendingNegotiations] = useState(0)
   
@@ -74,7 +74,20 @@ export default function GlobalHeader({ user, onSignOut }: GlobalHeaderProps) {
   return (
     <header className={headerClasses}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="flex justify-between items-center py-4">
+        {/* Mobile Header */}
+        <div className="md:hidden flex justify-between items-center py-3">
+          <div className="flex items-center">
+            <h1 className="text-lg font-bold text-blue-600">
+              {user?.name || 'Family Tasks'}
+            </h1>
+          </div>
+          <div className="flex items-center">
+            <NotificationBell />
+          </div>
+        </div>
+        
+        {/* Desktop Header */}
+        <div className="hidden md:flex justify-between items-center py-4">
           <div className="flex items-center space-x-8">
             <Link href={user?.role === 'parent' ? '/dashboard/parent' : '/dashboard/child'}>
               <h1 className="text-2xl font-bold text-blue-600 hover:text-blue-700 cursor-pointer">

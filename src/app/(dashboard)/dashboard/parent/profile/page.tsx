@@ -153,8 +153,8 @@ export default function ParentProfilePage() {
   return (
     <>
       <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {/* Mobile Header */}
-        <div className="flex justify-between items-center mb-6 md:hidden">
+        {/* Mobile Header - Hidden since we now have GlobalHeader on mobile */}
+        <div className="hidden">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Family Profile</h1>
             <p className="text-sm text-gray-600">Manage family settings</p>

@@ -186,7 +186,7 @@ export default function NegotiationsPage() {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="hidden md:flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">Task Negotiations</h1>
           <p className="text-gray-600 mt-1">Manage your task transfer offers and parent requests</p>
