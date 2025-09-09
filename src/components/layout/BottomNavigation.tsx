@@ -7,6 +7,7 @@ import { User } from '@/types'
 import { useEffect, useState } from 'react'
 import { negotiationService } from '@/services/negotiationService'
 import { useRewards } from '@/hooks/useRewards'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { 
   Home, 
   CheckSquare, 
@@ -131,6 +132,11 @@ export default function BottomNavigation({ user }: BottomNavigationProps) {
             badge={item.badge}
           />
         ))}
+      </div>
+      
+      {/* Notification Bell - Mobile */}
+      <div className="absolute -top-12 left-4">
+        <NotificationBell />
       </div>
       
       {/* Points display for children */}

@@ -12,7 +12,7 @@ export function NotificationBell() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
+        className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors bg-white rounded-full shadow-lg md:bg-transparent md:shadow-none"
         aria-label="Notifications"
       >
         <svg
